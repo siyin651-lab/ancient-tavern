@@ -7,7 +7,6 @@ window.RochePlugin.register({
   chat: {
     contextProvider(ctx) {
       try {
-        // 使用原生 localStorage 同步读取，避免上下文中 roche API 作用域限制
         const raw = localStorage.getItem("ancient_tavern_drinks");
         if (!raw) return null;
         
@@ -16,7 +15,6 @@ window.RochePlugin.register({
         
         if (!drink || drink.remaining <= 0) return null;
 
-        // 使用最新消息的文本作为签名，防止用户重新生成（Regenerate）时重复扣除轮数
         const msgSig = ctx.latestUserMessage ? ctx.latestUserMessage.text : "";
         if (drink.lastMsg !== msgSig) {
           drink.remaining--;
@@ -30,7 +28,6 @@ window.RochePlugin.register({
           return null;
         }
 
-        // 拼接最高优先级的 System Prompt
         return `【系统最高强制设定】你刚才饮下了一杯名为“${drink.name}”的特制灵药/饮品。
 【药效设定】：${drink.effect}
 【系统指令】：你必须在接下来的对话中，100%绝对、完全地遵从上述药效设定来回应我。不要解释药效，直接表现出来。
@@ -56,7 +53,8 @@ window.RochePlugin.register({
           style.innerHTML = `
             .roche-plugin-tavern { font-family: "KaiTi", "STKaiti", serif; background: #161412; color: #dcb889; height: 100%; display: flex; flex-direction: column; overflow: hidden; padding: 16px; box-sizing: border-box; }
             .roche-plugin-tavern * { box-sizing: border-box; }
-            .tavern-header { text-align: center; font-size: 22px; font-weight: bold; border-bottom: 1px solid #4a3627; padding-bottom: 12px; margin-bottom: 16px; color: #c4473d; letter-spacing: 2px; }
+            .tavern-header-wrap { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #4a3627; padding-bottom: 12px; margin-bottom: 16px; }
+            .tavern-header-title { font-size: 22px; font-weight: bold; color: #c4473d; letter-spacing: 2px; text-align: center; flex: 1; }
             .tavern-selector-wrap { margin-bottom: 16px; }
             .tavern-select { width: 100%; background: #211d1a; color: #dcb889; border: 1px solid #4a3627; padding: 8px 12px; border-radius: 4px; font-family: inherit; font-size: 15px; outline: none; }
             .tavern-tabs { display: flex; justify-content: center; gap: 12px; margin-bottom: 16px; }
@@ -66,26 +64,25 @@ window.RochePlugin.register({
             .tavern-panel { display: none; }
             .tavern-panel.active { display: block; }
             
-            /* 抽卡 UI */
             .tavern-gacha-btn-wrap { text-align: center; margin-bottom: 16px; }
             .tavern-card { border: 1px solid #4a3627; background: linear-gradient(135deg, #26211c 0%, #1e1a17 100%); padding: 16px; border-radius: 6px; margin-bottom: 12px; position: relative; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
             .tavern-card-topic { font-size: 15px; line-height: 1.6; margin-bottom: 12px; color: #efdfc5; }
             .tavern-card-actions { display: flex; justify-content: flex-end; gap: 8px; }
             
-            /* 调酒 UI */
             .tavern-form-group { margin-bottom: 12px; }
             .tavern-label { display: block; margin-bottom: 6px; font-size: 14px; color: #a58866; }
             .tavern-input { width: 100%; background: #1a1714; color: #dcb889; border: 1px solid #4a3627; padding: 10px; border-radius: 4px; font-family: inherit; outline: none; }
             .tavern-input:focus { border-color: #8b231a; }
             .tavern-status-card { border: 1px dashed #8b231a; background: rgba(139, 35, 26, 0.1); padding: 16px; border-radius: 6px; text-align: center; margin-bottom: 16px; }
             
-            /* 按钮 */
             .tavern-btn { background: #3b2a1f; color: #dcb889; border: 1px solid #5c4535; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 14px; transition: 0.2s; }
             .tavern-btn:hover { background: #5c4535; }
             .tavern-btn-primary { background: #8b231a; color: #fff; border-color: #6a1a13; }
             .tavern-btn-primary:hover { background: #a82e22; }
             .tavern-btn-danger { background: transparent; color: #c4473d; border: 1px solid #c4473d; }
             .tavern-btn-danger:hover { background: rgba(196, 71, 61, 0.1); }
+            .tavern-btn-close { background: transparent; color: #999; border: 1px solid #555; padding: 4px 10px; font-size: 12px; }
+            .tavern-btn-close:hover { background: #333; color: #fff; }
           `;
           document.head.appendChild(style);
         }
@@ -93,32 +90,32 @@ window.RochePlugin.register({
         // 2. 挂载 HTML 结构
         container.innerHTML = `
           <div class="roche-plugin-tavern">
-            <div class="tavern-header">✦ 醉 梦 集 ✦</div>
+            <div class="tavern-header-wrap">
+              <div style="width: 50px;"></div>
+              <div class="tavern-header-title">✦ 醉 梦 集 ✦</div>
+              <button class="tavern-btn tavern-btn-close" id="tavern-close-app-btn">离开客栈</button>
+            </div>
             
-            <!-- 会话选择器 -->
             <div class="tavern-selector-wrap">
               <select class="tavern-select" id="tavern-conv-select">
                 <option value="">载入卷宗中...</option>
               </select>
             </div>
 
-            <!-- Tabs -->
             <div class="tavern-tabs">
               <div class="tavern-tab active" data-target="panel-gacha">忆海寻花 (抽签)</div>
               <div class="tavern-tab" data-target="panel-bartender">灵药坊 (调酒)</div>
             </div>
 
             <div class="tavern-content">
-              <!-- 抽签面板 -->
               <div id="panel-gacha" class="tavern-panel active">
                 <div class="tavern-gacha-btn-wrap">
-                  <button class="tavern-btn tavern-btn-primary" id="tavern-draw-btn" style="padding: 10px 30px; font-size: 16px;">✦ 卜一卦 (抽卡) ✦</button>
+                  <button class="tavern-btn tavern-btn-primary" id="tavern-draw-btn" style="padding: 10px 30px; font-size: 16px;">✦ 连抽五签 ✦</button>
                   <button class="tavern-btn tavern-btn-danger" id="tavern-clear-gacha-btn" style="margin-left: 10px;">清空全部</button>
                 </div>
                 <div id="tavern-gacha-list"></div>
               </div>
 
-              <!-- 调酒面板 -->
               <div id="panel-bartender" class="tavern-panel">
                 <div id="tavern-active-drink-wrap" style="display: none;">
                   <div class="tavern-status-card">
@@ -154,7 +151,11 @@ window.RochePlugin.register({
         let activeConvId = "";
         let gachaData = (await roche.storage.get("ancient_tavern_gacha")) || [];
 
-        // 加载会话列表
+        // 退出按键逻辑[cite: 2]
+        document.getElementById("tavern-close-app-btn").onclick = () => {
+          roche.ui.closeApp();
+        };
+
         async function loadConversations() {
           try {
             const list = await roche.conversation.list();
@@ -173,7 +174,6 @@ window.RochePlugin.register({
           }
         }
 
-        // Tab 切换
         tabs.forEach(tab => {
           tab.onclick = () => {
             tabs.forEach(t => t.classList.remove("active"));
@@ -188,7 +188,6 @@ window.RochePlugin.register({
           renderDrinkStatus();
         };
 
-        // --- 抽签 (Gacha) 逻辑 ---
         async function renderGacha() {
           const listEl = document.getElementById("tavern-gacha-list");
           listEl.innerHTML = gachaData.map((item, index) => `
@@ -226,43 +225,65 @@ window.RochePlugin.register({
           }
         };
 
+        // 连抽5次逻辑
         document.getElementById("tavern-draw-btn").onclick = async () => {
           if (!activeConvId) return roche.ui.toast("请先选择一个会话");
           
           const btn = document.getElementById("tavern-draw-btn");
-          btn.textContent = "卜算中...";
+          btn.textContent = "祈愿占卜中...";
           btn.disabled = true;
 
           try {
-            // 获取记忆上下文
-            const st = await roche.memory.getShortTerm({ conversationId: activeConvId, limit: 15 });
-            const lt = await roche.memory.getLongTerm({ conversationId: activeConvId, limit: 10 });
+            // 获取更大量记忆和角色人设
+            const convInfo = await roche.conversation.get(activeConvId);
+            let personaText = "未知设定";
+            if (convInfo && convInfo.contactId) {
+              try {
+                const char = await roche.character.get(convInfo.contactId);
+                personaText = char.persona || char.bio || "";
+              } catch(e) {}
+            }
             
-            const contextText = `近期对话摘要:\n${st.map(m => m.text).join("\n")}\n长期记忆事实:\n${(lt.facts||[]).map(f => f.summaryText).join("\n")}`;
+            const st = await roche.memory.getShortTerm({ conversationId: activeConvId, limit: 50 });
+            const lt = await roche.memory.getLongTerm({ conversationId: activeConvId, limit: 30 });
             
+            const contextText = `【对方角色设定】:\n${personaText}\n【近期对话摘要(50条)】:\n${st.map(m => m.text).join("\n")}\n【长期记忆事实(30条)】:\n${(lt.facts||[]).map(f => f.summaryText).join("\n")}`;
+            
+            const systemPrompt = `你是一个占卜师。请根据对方的人设和你们的共同记忆，为用户生成 5 个极具趣味性、可以直接在聊天中抛给角色的“互动话题”或“动作”。
+要求：
+1. 必须生成 5 条内容，每条用 ==== 分隔（不要加序号，不要解释，不要额外空行）。
+2. 用第一人称（用户）向角色说的原话或实施的动作输出。
+3. 请深度结合设定的反差来随机发挥：比如对方是阳光开朗很黏人的性格，你可以安排一些欲擒故纵的动作；如果对方是很矛盾爱主控但又很高冷、热情不起来的性格，你可以抛出一些试图打破他冰山外壳的试探性话题或恶作剧。
+
+参考资料：\n${contextText}`;
+
             const result = await roche.ai.chat({
               messages: [
-                { role: "system", content: "你是一个占卜师。请根据以下角色记忆，为用户生成一个极具趣味性、可以在聊天中抛给角色的“闲聊话题”或“互动动作”。\n要求：\n1. 用第一人称（用户）向角色说的原话或动作输出，不要任何多余的解释，不要前后缀。\n2. 字数限制在50字以内，带有古风意境，或极其切合对方近期记忆。\n\n记忆参考：\n" + contextText },
-                { role: "user", content: "请为我抽一张话题卡。" }
+                { role: "system", content: systemPrompt },
+                { role: "user", content: "请为我连抽5个话题签文，用====分隔。" }
               ],
-              temperature: 0.8
+              temperature: 0.9 // 调高温度增加随机性和创造力
             });
 
-            const topic = result.text.replace(/["'「」]/g, "").trim();
-            gachaData.unshift({ topic, date: Date.now() });
+            // 解析5条话题
+            const rawTopics = result.text.split("====").map(t => t.trim().replace(/^["'「」]|["'「」]$/g, "")).filter(Boolean);
+            
+            rawTopics.forEach(topic => {
+              gachaData.unshift({ topic, date: Date.now() });
+            });
+            
             await roche.storage.set("ancient_tavern_gacha", gachaData);
             renderGacha();
-            roche.ui.toast("新签已出");
+            roche.ui.toast("已成功抽取 5 支新签");
 
           } catch (e) {
             roche.ui.toast("卜算失败: " + e.message);
           } finally {
-            btn.textContent = "✦ 卜一卦 (抽卡) ✦";
+            btn.textContent = "✦ 连抽五签 ✦";
             btn.disabled = false;
           }
         };
 
-        // --- 调酒师 (Bartender) 逻辑 ---
         function renderDrinkStatus() {
           if (!activeConvId) return;
           const raw = localStorage.getItem("ancient_tavern_drinks");
@@ -318,7 +339,6 @@ window.RochePlugin.register({
       },
       
       async unmount(container, roche) {
-        // 清理绑定的全局方法与样式
         delete window._tavernCopy;
         delete window._tavernDel;
         const style = document.getElementById("ancient-tavern-style");
