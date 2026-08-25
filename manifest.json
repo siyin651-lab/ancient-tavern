@@ -1,0 +1,16 @@
+{
+  "id": "ancient-tavern",
+  "name": "醉梦集",
+  "version": "1.0.0",
+  "description": "古风风格的互动辅助插件：提供基于角色记忆的【随机话题抽卡】，以及强制角色服从N轮的【专属调酒/灵药植入】。让你们的互动更加妙趣横生。",
+  "author": "Roche Creator",
+  "entry": "https://raw.githubusercontent.com/siyin651-lab/ancient-tavern/main/ancient-tavern.js",
+  "hash": "",
+  "permissions": [
+    "character:read",
+    "memory:read",
+    "ai:chat",
+    "storage",
+    "ui"
+  ]
+}
