@@ -4,7 +4,7 @@
   "version": "1.1.0",
   "description": "水彩樱花主题的互动插件：支持自定义规则的话题抽签，以及双向互动的专属羁绊日记。",
   "author": "Roche Creator",
-  "entry": "https://raw.githubusercontent.com/siyin651-lab/blossom-diary/main/manifest.js",
+  "entry": "https://raw.githubusercontent.com/siyin651-lab/blossom-diary/main/plugin.js",
   "hash": "",
   "permissions": [
     "character:read",
